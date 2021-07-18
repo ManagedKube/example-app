@@ -86,7 +86,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: managedkube/example-app:$(git rev-parse --short "$GITHUB_SHA")
+          tags: managedkube/example-app:$GITHUB_SHA
       -
         name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
