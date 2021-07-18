@@ -1,0 +1,39 @@
+replicaCount: ${replica_count}
+
+fullnameOverride: ${fullnameOverride}
+namespace: ${namespace}
+
+containerSpecOptions:
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+
+deployment:
+  containers:
+  - name: ${fullnameOverride}
+    image:
+      repository: ${docker_repository}
+      tag: ${docker_tag}
+      pullPolicy: Always
+
+    env:
+      base:
+      - name: REDIS_HOST
+        value: ${redis_host}
+      - name: DB_HOST
+        value: ${db_host}
+      - name: DB_PASS
+        value: ${db_pass}
+      - name: INTRIGUE_PASS
+        value: ${intrigue_pass}
+      perEnv: []
+
+    ports:
+    - name: http
+      protocol: TCP
+      containerPort: 7777
+      servicePort: 7777
+
+    resources:
+      requests:
+        memory: ${requests_memory}
