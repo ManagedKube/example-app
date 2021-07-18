@@ -90,3 +90,9 @@ jobs:
       -
         name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
+
+  # Deploy to dev
+  # deploy-dev:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Commit change to the dev tags
