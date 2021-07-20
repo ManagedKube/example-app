@@ -1,3 +1,22 @@
+locals {
+  aws_region        = "us-east-1"
+  environment_name  = "dev"
+  namespace         = "app-dev"
+  fullnameOverride  = "gem"
+  replica_count     = 1
+  docker_repository = "managedkube/example-app:latest"
+  docker_tag        = "latest"
+  requests_memory   = "1Gi"
+
+  tags = {
+    ops_env              = "dev"
+    ops_managed_by       = "terraform",
+    ops_source_repo      = "kubernetes-ops",
+    ops_source_repo_path = "terraform-environments/aws/dev",
+    ops_owners           = "example-app",
+  }
+}
+
 terraform {
   required_providers {
     aws = {
@@ -19,7 +38,7 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region = local.aws_region
 }
 
 data "terraform_remote_state" "eks" {
@@ -38,7 +57,7 @@ provider "helm" {
     cluster_ca_certificate = base64decode(data.terraform_remote_state.eks.outputs.cluster_certificate_authority_data)
     exec {
       api_version = "client.authentication.k8s.io/v1alpha1"
-      args        = ["eks", "get-token", "--cluster-name", var.environment_name]
+      args        = ["eks", "get-token", "--cluster-name", local.environment_name]
       command     = "aws"
     }
   }
@@ -50,12 +69,12 @@ data "template_file" "helm_values" {
 
   # Parameters you want to pass into the helm_values.yaml.tpl file to be templated
   vars = {
-    fullnameOverride  = "${var.namespace}-worker"
-    namespace         = var.namespace
-    replica_count     = var.replica_count
-    docker_repository = var.docker_repository
-    docker_tag        = var.docker_tag
-    requests_memory   = var.requests_memory
+    fullnameOverride  = local.fullnameOverride
+    namespace         = local.namespace
+    replica_count     = local.replica_count
+    docker_repository = local.docker_repository
+    docker_tag        = local.docker_tag
+    requests_memory   = local.requests_memory
   }
 }
 
@@ -67,15 +86,15 @@ module "app" {
   # This is the helm repo add name
   official_chart_name = "standard-application"
   # This is what you want to name the chart when deploying
-  user_chart_name = "${var.namespace}-worker"
+  user_chart_name = local.fullnameOverride
   # The helm chart version you want to use
   helm_version = "1.0.11"
   # The namespace you want to install the chart into - it will create the namespace if it doesnt exist
-  namespace = var.namespace
+  namespace = local.namespace
   # The helm chart values file
   helm_values = data.template_file.helm_values.rendered
 
   depends_on = [
-    var.eks
+    data.terraform_remote_state.eks
   ]
 }
