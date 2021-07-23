@@ -51,7 +51,7 @@ jobs:
       - name: Setup Repos
         run: |
           mkdir -p zz-build
-          cp -a * zz-build/backend/
+          cp -a * zz-build/backend/ | true
           git clone git@github.com:TheBitGram/core.git zz-build/core
 
       - name: Build and push
