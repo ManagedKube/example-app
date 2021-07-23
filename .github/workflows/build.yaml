@@ -18,51 +18,6 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # The "build" workflow
-  tests:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-    - uses: actions/checkout@v2
-    
-    # Setup Go
-    - name: Setup Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: '1.14.0' # The Go version to download (if necessary) and use.
-    
-    # Install all the dependencies
-    - name: Install dependencies
-      run: |
-        go version
-        go get -u golang.org/x/lint/golint
-        
-    # Run build of the application
-    - name: Run build
-      run: go build . 
-      
-    # Run vet & lint on the code
-    - name: Run vet & lint
-      run: |
-        go vet .
-        golint .
-    
-    # Run testing on the code
-    - name: Run testing
-      run: cd test && go test -v
-    
-    # Send slack notification
-    # - name: Send slack notification
-    #   uses: 8398a7/action-slack@v3
-    #   with:
-    #     status: ${{ job.status }}
-    #     fields: repo,message,commit,author,action,eventName,ref,workflow,job,took # selectable (default: repo,message)
-    #   env:
-    #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }} # required
-    #   if: always() # Pick up events even if the job fails or is canceled.
 
   # Docker hub
   docker:
@@ -74,19 +29,41 @@ jobs:
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
-      -
-        name: Login to DockerHub
-        uses: docker/login-action@v1
+
+      # -
+      #   name: Login to DockerHub
+      #   uses: docker/login-action@v1
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      -
-        name: Build and push
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Setup Repos
+        run: |
+          mkdir -p zz-build
+          cp -a * zz-build/backend/
+          git clone git@github.com:TheBitGram/core.git zz-build/core
+
+      - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v2
         with:
+          file: zz-build/backend/Dockerfile
+          tag_with_ref: true
           push: true
-          tags: managedkube/example-app:${{ github.sha }}
+          tags: |
+            067550988196.dkr.ecr.us-east-1.amazonaws.com/frontend:${{ github.sha }}
+            067550988196.dkr.ecr.us-east-1.amazonaws.com/frontend:latest
       -
         name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
