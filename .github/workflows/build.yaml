@@ -136,7 +136,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
       with:
-        token: ${{ secrets.PERSONAL_ACCESS_TOKEN_CORE }}
+        token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         ref: 'main'
 
     - name: Extract tag var
