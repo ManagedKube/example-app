@@ -1,0 +1,112 @@
+name: "Build Docker Image"
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - release/*
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+      - develop
+      - release/*
+
+jobs:
+  build_image:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_REPOSITORY_NAME: ghcr.io/managedkube/example-app
+    # Map a step output to a job output
+    outputs:
+      docker_tags: ${{ steps.meta.outputs.tags }}
+      docker_tag_with_sha: ${{ steps.full_docker_tag.outputs.DOCKER_TAG }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      # Docs: https://github.com/docker/build-push-action/blob/master/docs/advanced/tags-labels.md
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          # list of Docker images to use as base name for tags
+          images: |
+            ${{ env.DOCKER_REPOSITORY_NAME }}
+      # Set a string for a docker tag in the format of: <branch>-<sha - 8 characters>
+      - name: Set docker_tag
+        id: full_docker_tag
+        run: |
+          export OUT=${{ steps.meta.outputs.tags }}-$(echo ${GITHUB_SHA} | cut -c1-8)
+          echo "::set-output name=DOCKER_TAG::$OUT"
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1 
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN  }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          # Pushing two tags
+          tags: ${{ steps.meta.outputs.tags }},${{ steps.full_docker_tag.outputs.DOCKER_TAG }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: NPM_TOKEN=${{secrets['NPM_TOKEN']}}
+
+
+# if branch is "develop", trigger deploy to the dev cluster
+  deploy_to_dev:
+    needs: ["build_image"]
+    runs-on: ubuntu-latest
+    env:
+      TERRAFORM_FILE_PATH: terraform-environments/aws/dev/helm/110-x2-auth-d/main.tf
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    steps:
+      - uses: jungwinter/split@v1
+        id: split
+        with:
+          seperator: ":"
+          msg: ${{needs.build_image.outputs.docker_tag_with_sha}}
+      - name: image_name
+        run: echo "${{ steps.split.outputs._0 }}"
+      - name: image_tag
+        run: echo "${{ steps.split.outputs._1 }}"
+      # Checkout the managedkube/example-app repo
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          repository: managedkube/example-app
+          ref: 'main'
+          token: ${{ secrets.PAT_DEPLOY }}
+      # Update the docker tags in the TF/helm deployment
+      - name: Update dev image tag
+        uses: jacobtomlinson/gha-find-replace@0.1.4
+        env:
+          TERRAFORM_FILE_PATH: ${{ env.TERRAFORM_FILE_PATH }}
+        with:
+          find: "docker_tag\\s+=\\s+\".*\""
+          replace: "docker_tag = \"${{ steps.split.outputs._1 }}\""
+          include: ${{ env.TERRAFORM_FILE_PATH }}
+      - name: Terraform Format
+        run: terraform fmt ${{ env.TERRAFORM_FILE_PATH }}
+      # Print the changes made
+      - name: Check output
+        run: |
+          echo "ref: ${{ github.ref }}"
+          echo "head_ref: ${{ github.head_ref }}"
+          echo "base_ref: ${{ github.base_ref }}"
+          echo "steps.split.outputs._1: ${{ steps.split.outputs._1 }}"
+          cat ${{ env.TERRAFORM_FILE_PATH }}
+      # Commit and push changes
+      - name: Update dev deploy docker tags file
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Automated Change | Deploy to dev | tags: ${{ steps.split.outputs._1 }}"
+          file_pattern: terraform-environments/*
+          branch: main
+          
