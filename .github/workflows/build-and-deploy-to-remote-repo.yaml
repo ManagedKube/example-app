@@ -64,7 +64,7 @@ jobs:
     needs: ["build_image"]
     runs-on: ubuntu-latest
     env:
-      TERRAFORM_FILE_PATH: terraform-environments/aws/dev/helm/110-x2-auth-d/main.tf
+      TERRAFORM_FILE_PATH: terraform-environments/aws/dev/helm/example-app/main.tf
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     steps:
       - uses: jungwinter/split@v1
